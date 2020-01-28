@@ -47,13 +47,14 @@ def fetch_quilt_path(path):
             warn(
                 "Unable to locate local raster data.  Streaming from S3 instead. "
                 "For better performance, you can store NLCD rasters locally using "
-                "the `data.store_rasters()` function")
+                "the `data.store_rasters()` function"
+            )
 
-            nlcd = quilt3.Package.browse(
-                                "rasters/nlcd", "s3://quilt-cgs"
-                            )
-            # dont url parse if data are remote because we need the s3 prefix
+            nlcd = quilt3.Package.browse("rasters/nlcd", "s3://quilt-cgs")
             full_path = unquote(nlcd[path + ".tif"].get())
+            parts = urlparse(full_path)
+            full_path = parts.scheme + "://" + parts.hostname + parts.path
+
     else:
         return path
     return full_path
