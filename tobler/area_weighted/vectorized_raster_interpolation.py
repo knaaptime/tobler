@@ -72,11 +72,13 @@ def fast_append_profile_in_gdf(geodataframe, raster_path, force_crs_match=True):
     _check_presence_of_crs(geodataframe)
     raster_path = fetch_quilt_path(raster_path)
     if force_crs_match:
-        with rasterio.open(raster_path) as raster:
-            # raster =
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                geodataframe = geodataframe.to_crs(crs=raster.crs.data)
+        with rasterio.env.Env(aws_unsigned=True):
+
+            with rasterio.open(raster_path) as raster:
+                # raster =
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    geodataframe = geodataframe.to_crs(crs=raster.crs.data)
     else:
         warnings.warn(
             "The GeoDataFrame is not being reprojected. The clipping might be being performing on unmatching polygon to the raster."
@@ -378,60 +380,61 @@ def create_non_zero_population_by_pixels_locations(
         )
 
     else:
-        with rasterio.open(fetch_quilt_path(raster)) as raster:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                geodataframe_projected = geodataframe.to_crs(crs=raster.crs.data)
-            result_pops_array = np.array([])
-            result_lons_array = np.array([])
-            result_lats_array = np.array([])
+        with rasterio.env.Env(aws_unsigned=True):
+            with rasterio.open(fetch_quilt_path(raster)) as raster:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    geodataframe_projected = geodataframe.to_crs(crs=raster.crs.data)
+                result_pops_array = np.array([])
+                result_lons_array = np.array([])
+                result_lats_array = np.array([])
 
-            pbar = tqdm(
-                total=len(geodataframe_projected),
-                desc="Estimating population per pixel",
-            )
+                pbar = tqdm(
+                    total=len(geodataframe_projected),
+                    desc="Estimating population per pixel",
+                )
 
-            for line_index in range(len(geodataframe_projected)):
-                polygon_projected = geodataframe_projected.iloc[[line_index]]
+                for line_index in range(len(geodataframe_projected)):
+                    polygon_projected = geodataframe_projected.iloc[[line_index]]
 
-                coords = getFeatures(polygon_projected)
+                    coords = getFeatures(polygon_projected)
 
-                out_img, out_transform = mask(dataset=raster, shapes=coords, crop=True)
+                    out_img, out_transform = mask(dataset=raster, shapes=coords, crop=True)
 
-                """Calculating the population for each pixel"""
-                trans_numpy = weights[out_img]  # Pixel population from regression
-                orig_estimate = polygon_projected[
-                    pop_string
-                ]  # Original Population Value of The polygon
-                correction_term = orig_estimate / trans_numpy.sum()
-                final_pop_numpy_pre = trans_numpy * np.array(correction_term)
+                    """Calculating the population for each pixel"""
+                    trans_numpy = weights[out_img]  # Pixel population from regression
+                    orig_estimate = polygon_projected[
+                        pop_string
+                    ]  # Original Population Value of The polygon
+                    correction_term = orig_estimate / trans_numpy.sum()
+                    final_pop_numpy_pre = trans_numpy * np.array(correction_term)
 
-                flatten_final_pop_numpy_pre = np.ndarray.flatten(final_pop_numpy_pre)
+                    flatten_final_pop_numpy_pre = np.ndarray.flatten(final_pop_numpy_pre)
 
-                non_zero_pop_index = np.where(flatten_final_pop_numpy_pre != 0)
+                    non_zero_pop_index = np.where(flatten_final_pop_numpy_pre != 0)
 
-                final_pop_numpy = flatten_final_pop_numpy_pre[non_zero_pop_index]
+                    final_pop_numpy = flatten_final_pop_numpy_pre[non_zero_pop_index]
 
-                """Retrieving location of each pixel"""
-                lons, lats = create_lon_lat(out_img, out_transform)
+                    """Retrieving location of each pixel"""
+                    lons, lats = create_lon_lat(out_img, out_transform)
 
-                final_lons = np.ndarray.flatten(lons)[non_zero_pop_index]
-                final_lats = np.ndarray.flatten(lats)[non_zero_pop_index]
+                    final_lons = np.ndarray.flatten(lons)[non_zero_pop_index]
+                    final_lats = np.ndarray.flatten(lats)[non_zero_pop_index]
 
-                """Append all flattens numpy arrays"""
-                result_pops_array = np.append(result_pops_array, final_pop_numpy)
-                result_lons_array = np.append(result_lons_array, final_lons)
-                result_lats_array = np.append(result_lats_array, final_lats)
+                    """Append all flattens numpy arrays"""
+                    result_pops_array = np.append(result_pops_array, final_pop_numpy)
+                    result_lons_array = np.append(result_lons_array, final_lons)
+                    result_lats_array = np.append(result_lats_array, final_lats)
 
-                pbar.update(1)
+                    pbar.update(1)
 
-            data = {
-                "pop_value": result_pops_array,
-                "lons": result_lons_array.round().astype(int).tolist(),
-                "lats": result_lats_array.round().astype(int).tolist(),
-            }
+                data = {
+                    "pop_value": result_pops_array,
+                    "lons": result_lons_array.round().astype(int).tolist(),
+                    "lats": result_lats_array.round().astype(int).tolist(),
+                }
 
-            corresp = pd.DataFrame.from_dict(data)
+                corresp = pd.DataFrame.from_dict(data)
         pbar.close()
 
     return corresp
@@ -528,18 +531,20 @@ def calculate_interpolated_population_from_correspondence_table(
     final_geodataframe = geodataframe.copy()[["geometry"]]
     pop_final = np.empty(len(geodataframe))
     raster = fetch_quilt_path(raster)
-    with rasterio.open(raster) as raster:
+    with rasterio.env.Env(aws_unsigned=True):
 
-        pbar = tqdm(total=len(geodataframe), desc="Estimating target polygon values")
+        with rasterio.open(raster) as raster:
 
-        for line_index in range(len(geodataframe)):
-            polygon = geodataframe.iloc[[line_index]]
-            pop_aux = calculate_interpolated_polygon_population_from_correspondence_table(
-                polygon, raster, corresp_table, force_crs_match
-            )
-            pop_final[line_index] = pop_aux
+            pbar = tqdm(total=len(geodataframe), desc="Estimating target polygon values")
 
-            pbar.update(1)
+            for line_index in range(len(geodataframe)):
+                polygon = geodataframe.iloc[[line_index]]
+                pop_aux = calculate_interpolated_polygon_population_from_correspondence_table(
+                    polygon, raster, corresp_table, force_crs_match
+                )
+                pop_final[line_index] = pop_aux
+
+                pbar.update(1)
 
         pbar.close()
         final_geodataframe[variable_name] = pop_final

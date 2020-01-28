@@ -45,10 +45,12 @@ def fetch_quilt_path(path):
 
         except ImportError:
             warn(
-                "Unable to locate local raster data. If you would like to use "
-                "raster data from the National Land Cover Database, you can "
-                "store it locally using the `data.store_rasters()` function")
+                "Unable to locate local raster data.  Streaming from S3 instead. "
+                "For better performance, you can store NLCD rasters locally using "
+                "the `data.store_rasters()` function")
 
+            # dont url parse if data are remote because we need the s3 prefix
+            full_path = unquote(nlcd[path + ".tif"].get()) 
     else:
         return path
     return full_path
