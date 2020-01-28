@@ -38,10 +38,10 @@ def fetch_quilt_path(path):
 
     if path in ["nlcd_2011", "nlcd_2001"]:
         try:
-            from quilt3.data.rasters import nlcd
+            from quilt3.data import rasters
 
-            full_path = unquote(nlcd[path + ".tif"].get())
-            full_path = urlparse(full_path).path
+            full_path = unquote(rasters.nlcd[path + ".tif"].get())
+            full_path = urlparse(rasters.full_path).path
 
         except ImportError:
             warn(
