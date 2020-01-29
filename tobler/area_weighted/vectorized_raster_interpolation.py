@@ -83,10 +83,14 @@ def fast_append_profile_in_gdf(geodataframe, raster_path, force_crs_match=True):
         warnings.warn(
             "The GeoDataFrame is not being reprojected. The clipping might be being performing on unmatching polygon to the raster."
         )
+    with rasterio.env.Env(aws_unsigned=True):
 
-    zonal_gjson = rs.zonal_stats(
-        geodataframe, raster_path, prefix="Type_", geojson_out=True, categorical=True
-    )
+        with rasterio.open(raster_path) as raster:
+            affine = raster.transform
+            array = raster.read(1)
+            zonal_gjson = rs.zonal_stats(
+                geodataframe, array, prefix="Type_", geojson_out=True, categorical=True, affine=affine
+            )
 
     zonal_ppt_gdf = GeoDataFrame.from_features(zonal_gjson)
 
